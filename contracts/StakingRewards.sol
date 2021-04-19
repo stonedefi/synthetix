@@ -126,6 +126,12 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         // very high values of rewardRate in the earned and rewardsPerToken functions;
         // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
         uint balance = rewardsToken.balanceOf(address(this));
+
+        if (rewardsToken == stakingToken) {
+            // Fixed by RockX: handle the case that the rewards token and the staking token are the same.
+            balance -= _totalSupply;
+        }
+
         require(rewardRate <= balance.div(rewardsDuration), "Provided reward too high");
 
         lastUpdateTime = block.timestamp;
