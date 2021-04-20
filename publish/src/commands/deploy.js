@@ -772,12 +772,26 @@ const deploy = async ({
 		args: [account, addressOf(readProxyForResolver)],
 	});
 
-	const exchanger = await deployer.deployContract({
-		name: 'Exchanger',
-		source: useOvm ? 'Exchanger' : 'ExchangerWithVirtualSynth',
-		deps: ['AddressResolver'],
-		args: [account, addressOf(readProxyForResolver)],
-	});
+	let exchanger;
+	if (useOvm) {
+		exchanger = await deployer.deployContract({
+			name: 'Exchanger',
+			source: 'Exchanger',
+			deps: ['AddressResolver'],
+			args: [account, addressOf(readProxyForResolver)],
+		});
+	} else {
+		exchanger = await deployer.deployContract({
+			name: 'Exchanger',
+			source: 'ExchangerWithVirtualSynth',
+			deps: ['AddressResolver'],
+			args: [account, addressOf(readProxyForResolver)],
+		});
+
+		await deployer.deployContract({
+			name: 'VirtualSynthMastercopy',
+		});
+	}
 
 	const exchangeState = await deployer.deployContract({
 		name: 'ExchangeState',
@@ -1218,7 +1232,7 @@ const deploy = async ({
 	const poolFee = w3utils.toWei('0.008'); // 0.8% of the market's value goes to the pool in the end.
 	const creatorFee = w3utils.toWei('0.002'); // 0.2% of the market's value goes to the creator.
 	const refundFee = w3utils.toWei('0.05'); // 5% of a bid stays in the pot if it is refunded.
-	await deployer.deployContract({
+	const binaryOptionMarketManager = await deployer.deployContract({
 		name: 'BinaryOptionMarketManager',
 		args: [
 			account,
@@ -1567,6 +1581,131 @@ const deploy = async ({
 		}
 	}
 
+	// Now do binary option market cache rebuilding
+	if (binaryOptionMarketManager) {
+		console.log(gray('Checking all binary option markets have rebuilt caches'));
+		let binaryOptionMarkets = [];
+		// now grab all possible binary option markets to rebuild caches as well
+		const binaryOptionsFetchPageSize = 100;
+		for (const marketType of ['Active', 'Matured']) {
+			const numBinaryOptionMarkets = Number(
+				await binaryOptionMarketManager.methods[`num${marketType}Markets`]().call()
+			);
+			console.log(
+				gray('Found'),
+				yellow(numBinaryOptionMarkets),
+				gray(marketType, 'binary option markets')
+			);
+
+			if (numBinaryOptionMarkets > binaryOptionsFetchPageSize) {
+				console.log(
+					redBright(
+						'⚠⚠⚠ Warning: cannot fetch all',
+						marketType,
+						'binary option markets as there are',
+						numBinaryOptionMarkets,
+						'which is more than page size of',
+						binaryOptionsFetchPageSize
+					)
+				);
+			} else {
+				// fetch the list of markets
+				const marketAddresses = await binaryOptionMarketManager.methods[
+					`${marketType.toLowerCase()}Markets`
+				](0, binaryOptionsFetchPageSize).call();
+
+				// wrap them in a contract via the deployer
+				const markets = marketAddresses.map(
+					binaryOptionMarket =>
+						new deployer.web3.eth.Contract(compiled['BinaryOptionMarket'].abi, binaryOptionMarket)
+				);
+
+				binaryOptionMarkets = binaryOptionMarkets.concat(markets);
+			}
+		}
+
+		// now figure out which binary option markets need their caches rebuilt
+		const binaryOptionMarketsToRebuildCacheOn = [];
+		for (const market of binaryOptionMarkets) {
+			try {
+				const isCached = await market.methods.isResolverCached().call();
+				if (!isCached) {
+					binaryOptionMarketsToRebuildCacheOn.push(addressOf(market));
+				}
+				console.log(
+					gray('Binary option market'),
+					yellow(addressOf(market)),
+					gray('is newer and cache status'),
+					yellow(isCached)
+				);
+			} catch (err) {
+				// the challenge being that some used an older MixinResolver API
+				const oldBinaryOptionMarketABI = [
+					{
+						constant: true,
+						inputs: [
+							{
+								internalType: 'contract AddressResolver',
+								name: '_resolver',
+								type: 'address',
+							},
+						],
+						name: 'isResolverCached',
+						outputs: [
+							{
+								internalType: 'bool',
+								name: '',
+								type: 'bool',
+							},
+						],
+						payable: false,
+						stateMutability: 'view',
+						type: 'function',
+						signature: '0x631e1444',
+					},
+				];
+
+				const oldBinaryOptionMarket = new deployer.web3.eth.Contract(
+					oldBinaryOptionMarketABI,
+					addressOf(market)
+				);
+
+				const isCached = await oldBinaryOptionMarket.methods
+					.isResolverCached(addressOf(readProxyForResolver))
+					.call();
+				if (!isCached) {
+					binaryOptionMarketsToRebuildCacheOn.push(addressOf(market));
+				}
+
+				console.log(
+					gray('Binary option market'),
+					yellow(addressOf(market)),
+					gray('is older and cache status'),
+					yellow(isCached)
+				);
+			}
+		}
+
+		console.log(
+			gray('In total'),
+			yellow(binaryOptionMarketsToRebuildCacheOn.length),
+			gray('binary option markets need their caches rebuilt')
+		);
+
+		const addressesChunkSize = useOvm ? 7 : 20;
+		for (let i = 0; i < binaryOptionMarketsToRebuildCacheOn.length; i += addressesChunkSize) {
+			const chunk = binaryOptionMarketsToRebuildCacheOn.slice(i, i + addressesChunkSize);
+			await runStep({
+				gasLimit: useOvm ? OVM_MAX_GAS_LIMIT : 7e6,
+				contract: `BinaryOptionMarketManager`,
+				target: binaryOptionMarketManager,
+				publiclyCallable: true, // does not require owner
+				write: 'rebuildMarketCaches',
+				writeArg: [chunk],
+			});
+		}
+	}
+
 	// Now perform a sync of legacy contracts that have not been replaced in Shaula (v2.35.x)
 	// EtherCollateral, EtherCollateralsUSD
 	console.log(gray('Checking all legacy contracts with setResolverAndSyncCache() are rebuilt...'));
@@ -1854,13 +1993,15 @@ const deploy = async ({
 		}
 
 		// setup initial values if they are unset
+
+		const waitingPeriodSecs = await getDeployParameter('WAITING_PERIOD_SECS');
 		await runStep({
 			contract: 'SystemSettings',
 			target: systemSettings,
 			read: 'waitingPeriodSecs',
-			expected: input => input !== '0',
+			expected: input => (waitingPeriodSecs === '0' ? true : input !== '0'),
 			write: 'setWaitingPeriodSecs',
-			writeArg: await getDeployParameter('WAITING_PERIOD_SECS'),
+			writeArg: waitingPeriodSecs,
 		});
 
 		await runStep({
@@ -2114,7 +2255,7 @@ const deploy = async ({
 			contract: 'CollateralManager',
 			target: collateralManager,
 			read: 'maxDebt',
-			expected: input => input === collateralManagerDefaults['MAX_DEBT'],
+			expected: input => input !== '0', // only change if zero
 			write: 'setMaxDebt',
 			writeArg: [collateralManagerDefaults['MAX_DEBT']],
 		});
@@ -2123,7 +2264,7 @@ const deploy = async ({
 			contract: 'CollateralManager',
 			target: collateralManager,
 			read: 'baseBorrowRate',
-			expected: input => input === collateralManagerDefaults['BASE_BORROW_RATE'],
+			expected: input => input !== '0', // only change if zero
 			write: 'setBaseBorrowRate',
 			writeArg: [collateralManagerDefaults['BASE_BORROW_RATE']],
 		});
@@ -2132,7 +2273,7 @@ const deploy = async ({
 			contract: 'CollateralManager',
 			target: collateralManager,
 			read: 'baseShortRate',
-			expected: input => input === collateralManagerDefaults['BASE_SHORT_RATE'],
+			expected: input => input !== '0', // only change if zero
 			write: 'setBaseShortRate',
 			writeArg: [collateralManagerDefaults['BASE_SHORT_RATE']],
 		});
@@ -2184,7 +2325,7 @@ const deploy = async ({
 			contract: 'CollateralShort',
 			target: collateralShort,
 			read: 'interactionDelay',
-			expected: input => input === collateralShortInteractionDelay,
+			expected: input => input !== '0', // only change if zero
 			write: 'setInteractionDelay',
 			writeArg: collateralShortInteractionDelay,
 		});
