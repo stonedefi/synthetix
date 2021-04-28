@@ -53,6 +53,14 @@ module.exports = {
 			blockGasLimit: 12e6,
 			url: 'http://localhost:8545',
 		},
+		kovan: {
+			url: `https://kovan.infura.io/v3/${process.env.WEB3_INFURA_PROJECT_ID}`,
+			accounts: [
+				process.env.ROCKX_PRIVATE_KEY_TEST_1, // gov account
+				process.env.ROCKX_PRIVATE_KEY_TEST_2, // reward account
+				process.env.ROCKX_PRIVATE_KEY_TEST_3, // user account
+			],
+		},
 	},
 	gasReporter: {
 		enabled: false,
