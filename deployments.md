@@ -1,0 +1,13 @@
+# Test in Prod
+
+Fake STN Token(XYZ): 0xBb03aA7cBf2c94545e8C606190Bb97B122376614
+Staking Fake STN: 0x2b94a71792d6afcc4096278631739eb9cc83d542
+Staking UNI STN/ETH LP: 0xa291383A1c70901c01917Ca621e974CC4a253B4f
+
+# Add reward
+
+```
+STN.transfer(0x2b94a71792d6afcc4096278631739eb9cc83d542, 10000000000000000000000)  // 10000 STN
+stakingRewards.setRewardsDuration(8640000)  // 100 days
+stakingRewards.notifyRewardAmount(2000000000000000000000) // 2000 STN
+```
