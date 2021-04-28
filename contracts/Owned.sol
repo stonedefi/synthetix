@@ -13,6 +13,7 @@ contract Owned {
     }
 
     function nominateNewOwner(address _owner) external onlyOwner {
+        require(_owner != address(0), "Owner address cannot be 0");
         nominatedOwner = _owner;
         emit OwnerNominated(_owner);
     }

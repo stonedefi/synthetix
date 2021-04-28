@@ -479,6 +479,7 @@ contract Owned {
     }
 
     function nominateNewOwner(address _owner) external onlyOwner {
+        require(_owner != address(0), "Owner address cannot be 0");
         nominatedOwner = _owner;
         emit OwnerNominated(_owner);
     }
@@ -514,6 +515,8 @@ pragma solidity ^0.5.16;
 contract RewardsDistributionRecipient is Owned {
     address public rewardsDistribution;
 
+    event RewardsDistributionUpdated(address newRewardsDistribution);
+
     function notifyRewardAmount(uint256 reward) external;
 
     modifier onlyRewardsDistribution() {
@@ -522,7 +525,9 @@ contract RewardsDistributionRecipient is Owned {
     }
 
     function setRewardsDistribution(address _rewardsDistribution) external onlyOwner {
+        require(_rewardsDistribution != address(0), "_rewardsDistribution cannot be 0");
         rewardsDistribution = _rewardsDistribution;
+        emit RewardsDistributionUpdated(_rewardsDistribution);
     }
 }
 
@@ -616,6 +621,9 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         address _rewardsToken,
         address _stakingToken
     ) public Owned(_owner) {
+        require(_rewardsDistribution != address(0), "_rewardsDistribution cannot be 0");
+        require(_rewardsToken != address(0), "_rewardsToken cannot be 0");
+        require(_stakingToken != address(0), "_stakingToken cannot be 0");
         rewardsToken = IERC20(_rewardsToken);
         stakingToken = IERC20(_stakingToken);
         rewardsDistribution = _rewardsDistribution;
@@ -716,11 +724,14 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
 
     // End rewards emission earlier
     function updatePeriodFinish(uint timestamp) external onlyOwner updateReward(address(0)) {
+        require(timestamp < periodFinish, "should only change to an earlier time");
         periodFinish = timestamp;
+        emit PeriodFinishUpdated(timestamp);
     }
 
     // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
+        require(tokenAddress != address(0), "tokenAddress cannot be 0");
         require(tokenAddress != address(stakingToken), "Cannot withdraw the staking token");
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
@@ -755,4 +766,5 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
     event RewardPaid(address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
     event Recovered(address token, uint256 amount);
+    event PeriodFinishUpdated(uint newTimestamp);
 }
