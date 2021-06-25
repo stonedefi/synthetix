@@ -27,6 +27,9 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
 
+    bool public emergency = false;
+    uint256 public lastEmergencyTime;
+
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
 
@@ -99,6 +102,17 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         emit Withdrawn(msg.sender, amount);
     }
 
+    // Withdraw without caring about rewards. EMERGENCY ONLY.
+    function emergencyWithdraw(uint256 amount) public nonReentrant onEmergency {
+        require(amount > 0, "Cannot withdraw 0");
+        _totalSupply = _totalSupply.sub(amount);
+        _balances[msg.sender] = _balances[msg.sender].sub(amount);
+        stakingToken.safeTransfer(msg.sender, amount);
+
+        emit EmergencyWithdraw(msg.sender, amount);
+        rewards[msg.sender] = 0;
+    }
+
     function getReward() public nonReentrant updateReward(msg.sender) {
         uint256 reward = rewards[msg.sender];
         if (reward > 0) {
@@ -145,6 +159,9 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
     // End rewards emission earlier
     function updatePeriodFinish(uint timestamp) external onlyOwner updateReward(address(0)) {
         require(timestamp < periodFinish, "should only change to an earlier time");
+        require(timestamp > lastUpdateTime, "should later to lastUpdateTime");
+        require(timestamp > block.timestamp, "should later to block timestamp");
+        
         periodFinish = timestamp;
         emit PeriodFinishUpdated(timestamp);
     }
@@ -166,6 +183,35 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         emit RewardsDurationUpdated(rewardsDuration);
     }
 
+    // End rewards emission earlier
+    function setPeriodFinish(uint timestamp) external onlyOwner onEmergency {
+        periodFinish = timestamp;
+        emit SetPeriodFinish(timestamp);
+    }
+
+    /**
+     * @notice Change the emergency state of the contract
+     * @dev Only the contract owner may call this.
+     */
+    function setEmergency(bool _emergency) external onlyOwner {
+        // Ensure we're actually changing the state before we do anything
+        if (_emergency == emergency) {
+            return;
+        }
+
+        // Set our emergency state.
+        emergency = _emergency;
+
+        // If applicable, set the last emergency time.
+        if (emergency) {
+            lastEmergencyTime = now;
+        }
+
+        // Let everyone know that our emergency state has changed.
+        emit EmergencyChanged(emergency);
+    }
+
+    
     /* ========== MODIFIERS ========== */
 
     modifier updateReward(address account) {
@@ -178,13 +224,21 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         _;
     }
 
+    modifier onEmergency {
+        require(emergency, "This action cannot be performed while the contract is not emergency");
+        _;
+    }
+
     /* ========== EVENTS ========== */
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
+    event EmergencyWithdraw(address indexed userr, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
     event Recovered(address token, uint256 amount);
     event PeriodFinishUpdated(uint newTimestamp);
+    event SetPeriodFinish(uint newTimestamp);
+    event EmergencyChanged(bool isEmergency);
 }

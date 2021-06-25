@@ -1,0 +1,6 @@
+
+
+npx hardhat run scripts/deploy.js  --network kovan
+npx hardhat run scripts/test-staking.js  --network kovan
+npx hardhat run scripts/test-staking-emergency.js  --network kovan
+npx hardhat run scripts/test-staking-periodFinish-emergency.js --network kovan

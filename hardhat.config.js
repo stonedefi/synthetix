@@ -60,6 +60,10 @@ module.exports = {
 				process.env.ROCKX_PRIVATE_KEY_TEST_2, // reward account
 				process.env.ROCKX_PRIVATE_KEY_TEST_3, // user account
 			],
+			timeout: 300000,
+			gas: 12e6,
+			blockGasLimit: 12450000,
+			gasPrice: GAS_PRICE,
 		},
 	},
 	gasReporter: {

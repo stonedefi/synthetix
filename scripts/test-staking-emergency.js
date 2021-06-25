@@ -3,7 +3,7 @@ const { assert } = require('../test/contracts/common');
 
 const STUSDC = '0xbD40Ec2839FD401b87320E0324Ff419BfcC56308';
 const STN = '0xE1DD75d6e0B8dFdfa7712e0653F60E86592f7646';
-const DEPLOYED_STAKING_STUSDC = '0x9ad8661782D80694C536F8937CA151A0B4511F0B';
+const DEPLOYED_STAKING_STUSDC = '0x72a5eF4458261c66bF99eC66986a90BE5AC35820';
 const DEPLOYED_STAKING_STN = '0x1920569883C17aF87B3575E2387E94D24934c099';
 
 const StakingRewards = artifacts.require('StakingRewards');
@@ -100,6 +100,45 @@ async function runTest(stakingContract, tokenContract, depositAmount) {
 	// claim reward
 	console.log('Claiming rewards...');
 	tx = await stakingRewards.getReward({ from: user });
+	await print_balances(user);
+
+	// try emergencyWithdraw not on emergency
+	console.log('Waiting for 20s...');
+	await sleep(20);
+	console.log('Try emergencyWithdraw not on emergency...');
+	err = null;
+	try {
+		tx = await stakingRewards.emergencyWithdraw(depositAmount.div(new BN(3)), { from: user });
+	} catch (error) {
+		err = error;
+	}
+
+	console.log('EmergencyWithdraw err:', err);
+	assert.isNotNull(err, 'Tx should be failed and throw.');
+	await print_balances(user);
+
+	// set emergency
+	emergency = await stakingRewards.emergency();
+	console.log('emergency:', emergency);
+
+	console.log('Waiting for 10s...');
+	await sleep(10);
+	console.log('Set Emergency...');
+	tx = await stakingRewards.setEmergency(true);
+
+	emergency = await stakingRewards.emergency();
+	console.log('emergency:', emergency);
+
+	// withdraw on emergency
+	console.log('Waiting for 20s...');
+	await sleep(20);
+	console.log('Try withdraw on emergency...');
+	err = null;
+	try {
+		tx = await stakingRewards.emergencyWithdraw(depositAmount.div(new BN(3)), { from: user });
+	} catch (error) {
+		err = error;
+	}
 	await print_balances(user);
 
 	// wait for mining blocks
