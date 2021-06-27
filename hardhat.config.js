@@ -65,6 +65,12 @@ module.exports = {
 			blockGasLimit: 12450000,
 			gasPrice: GAS_PRICE,
 		},
+		mainnet: {
+			url: `https://mainnet.infura.io/v3/${process.env.WEB3_INFURA_PROJECT_ID}`,
+			accounts: [
+				process.env.ROCKX_PRIVATE_KEY_MAIN_1,
+			],
+		},
 	},
 	gasReporter: {
 		enabled: false,
