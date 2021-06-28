@@ -12,7 +12,7 @@ const {
 	constants: { inflationStartTimestampInSecs, AST_FILENAME, AST_FOLDER, BUILD_FOLDER },
 } = require('.');
 
-const GAS_PRICE = 20e9; // 20 GWEI
+const GAS_PRICE = 15e9; // 20 GWEI
 const CACHE_FOLDER = 'cache';
 
 module.exports = {
@@ -70,6 +70,8 @@ module.exports = {
 			accounts: [
 				process.env.ROCKX_PRIVATE_KEY_MAIN_1,
 			],
+			timeout: 300000,
+			gasPrice: GAS_PRICE,
 		},
 	},
 	gasReporter: {
