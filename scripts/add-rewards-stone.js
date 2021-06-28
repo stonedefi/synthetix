@@ -7,6 +7,8 @@ const KOVAN_STN = '0xe14cccC1abe7a4a17f11C68ff18f7945D022D133';
 const KOVAN_LP_STN_ETH = '0xb572da900c00d25cf4e63d4ce1186eee1f4f27cf';
 const KOVAN_DEPLOYED_STAKING_STN = '0x0DE5FBf95f1a1f289Db6Bc2F9f976Cc6E8506FFF';
 const KOVAN_DEPLOYED_STAKING_LP = '0xcad81D9680Ca96BD5e3C28104160f190a2FE8226';
+// const KOVAN_DEPLOYED_STAKING_STN = '0xf5150b880bFeE084261b3A2c32B3a3fd9ac257aC';
+// const KOVAN_DEPLOYED_STAKING_LP = '0xa00DE9d7e541Fca0bD3f2a80A43Eb49b27DDFae4';
 const KOVAN_USER ='0xDF7B28E6371c932dB986b8E1BfE852304F2bE2a1'
 
 
@@ -32,6 +34,8 @@ async function main() {
 	console.log('Using the account: ', owner);
 
 	if (owner == KOVAN_USER){
+        var rewardToken = await IERC20.at(KOVAN_STN);
+
         var stakingStnRewards = await StakingRewards.at(KOVAN_DEPLOYED_STAKING_STN);
         console.log('Kovan stakingStnRewards transfer reward token...');
         tx = await rewardToken.transfer(stakingStnRewards.address, stnRewardAmountBN);
