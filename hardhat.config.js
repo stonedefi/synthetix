@@ -71,7 +71,7 @@ module.exports = {
 				process.env.ROCKX_PRIVATE_KEY_MAIN_1,
 			],
 			timeout: 300000,
-			gasPrice: GAS_PRICE,
+			//gasPrice: GAS_PRICE,
 		},
 	},
 	gasReporter: {

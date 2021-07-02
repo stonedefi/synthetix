@@ -17,3 +17,11 @@ npx hardhat run scripts/add-rewards-stone.js  --network kovan
 
 // add reward for stone mainnet
 npx hardhat run scripts/add-rewards-stone.js  --network mainnet
+
+
+
+// get periodFinish for stone kovan
+npx hardhat run scripts/get-period-stone.js  --network kovan
+
+// get periodFinish for stone mainnet
+npx hardhat run scripts/get-period-stone.js  --network mainnet
